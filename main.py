@@ -37,39 +37,45 @@ albums_intro_file = 'intro.txt'
 create_folder(albums_folder)
 create_folder(songs_folder)
 
+#%%
+for child in Path(".").iterdir():
+    if child.is_file() and ".mp3" in child.name:
+        child.unlink()
+
 # %%
 record_file = Path(record_file_path)
 record = yaml.load(record_file)
 
+async def download_media(msg):
+    audio_attributes = [attr for attr in msg.audio.attributes if isinstance(attr, DocumentAttributeAudio)]
+    filename = f"{audio_attributes[0].performer} - {audio_attributes[0].title}.mp3" if audio_attributes[0].title and audio_attributes[0].performer else msg.file.name.replace('_', ' ')
+    filename = sanitize_filename(filename)
+    print(f"downloading {filename} ...")
+    audio_file_path = await client.download_media(msg, file=filename)
+    audio_file = Path(audio_file_path)
+    
+    if record["is_album"]:
+        if not Path(record["album_path"]).exists():
+            create_folder(record["album_path"])
+        audio_file.rename(path_join(record["album_path"], audio_file_path))
+    else:
+        if not Path(record["song_style_path"]).exists():
+            create_folder(record["song_style_path"])
+        audio_file.rename(path_join(record["song_style_path"], audio_file_path))
+        # record["song_name"] + (f'({record["song_amount_count"]})' if record["song_amount_count"] > 0 else '' ) + '.mp3' if audio_file_path.count('_') > 1 and record["song_name"] else 
+
+    print("save", audio_file.name, "successfully!")
 
 for msg in client.iter_messages('@fresh_electronic_music', reverse=True, offset_id=record["offset_id"]):
     if msg.audio :
-        audio_attributes = [attr for attr in msg.audio.attributes if isinstance(attr, DocumentAttributeAudio)]
-        filename = f"{audio_attributes[0].performer} - {audio_attributes[0].title}.mp3"
-        filename = sanitize_filename(filename)
-        print(f"downloading {filename} ...")
-        audio_file_path = client.download_media(msg, file=filename)
-        audio_file = Path(audio_file_path)
-
-        
-        if record["is_album"]:
-            if not Path(record["album_path"]).exists():
-                create_folder(record["album_path"])
-            audio_file.rename(path_join(record["album_path"], audio_file_path))
-        else:
-            if not Path(record["song_style_path"]).exists():
-                create_folder(record["song_style_path"])
-            audio_file.rename(path_join(record["song_style_path"], audio_file_path))
-            # record["song_name"] + (f'({record["song_amount_count"]})' if record["song_amount_count"] > 0 else '' ) + '.mp3' if audio_file_path.count('_') > 1 and record["song_name"] else 
-
-        print("save", audio_file.name, "successfully!")
+        client.loop.run_until_complete(download_media(msg))
     else:
         print(msg.text)
         if "#fem_album" in msg.text or " EP" in msg.text:
             record["is_album"] = True
             
             album_name_re = re.search(r'(?<=\n)(.{1,}-.{1,})(?=\n)|(?<=\n)(.{1,})(?=\n)', msg.text)
-            record["album_path"] = str(path_join(albums_folder, album_name_re.group().strip() if album_name_re else not_classified_name))
+            record["album_path"] = str(path_join(albums_folder, sanitize_filename(album_name_re.group().strip()) if album_name_re else not_classified_name))
             create_folder(record["album_path"])
 
             record["album_intro"] = msg.text
@@ -95,6 +101,12 @@ for msg in client.iter_messages('@fresh_electronic_music', reverse=True, offset_
             print("song_styles:", song_style)
             record["song_style_path"] = str(path_join(songs_folder, song_style))
             create_folder(record["song_style_path"])
+        else:
+            record["is_album"] = False
+            record["song_style_path"] = str(path_join(songs_folder, not_classified_name))
+            print("song_styles:", not_classified_name)
+            create_folder(record["song_style_path"])
+            
         # TODO: determine if the message contains spcific keyword 
         # and classify it as single song or album
         # store the song name, album name, style, artist, etc.
