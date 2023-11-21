@@ -69,8 +69,7 @@ async def download_media(msg):
 for msg in client.iter_messages('@fresh_electronic_music', reverse=True, offset_id=record["offset_id"]):
     if msg.audio :
         client.loop.run_until_complete(download_media(msg))
-    else:
-        print(msg.text)
+    elif msg.text:
         if "#fem_album" in msg.text or " EP" in msg.text:
             record["is_album"] = True
             

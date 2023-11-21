@@ -3,3 +3,4 @@
 config.yaml
 albums/
 songs/
+*.mp3
